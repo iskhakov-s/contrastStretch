@@ -9,61 +9,41 @@ class ProcessImg:
     algo_a = 0
     algo_b = 255
     hists = {}
-    new_img = {}
-
-    #TODO: replace 'self' in function arguments with None
-    #      then check in the func if the arg is not defined set it to the thing you want
-    #      https://stackoverflow.com/questions/1802971/nameerror-name-self-is-not-defined
+    img = {}
     
-    #TODO: can be expanded by having the functions implicitly work regardless of # of channels
-    #      or make subclass for rgb and greyscale images 
+    #TODO
+    #    simplify init
+    #    follow python naming convention
     
-    def __init__(self, img, rgb = True):
-        self.img = img
-        if rgb:
-            # make the rgb hists, stretch each channel, combine and make hists for stretched
-            self.img = cv2.cvtColor(self.img, cv2.COLOR_BGR2RGB)
-            r, g, b = cv2.split(self.img)
-            self.hists['r'], self.hists['g'], self.hists['b'] = self.make_hists()
-            self.stretched_r1, self.stretched_r2 = self.apply_stretch(self.hists['r'], r)
-            self.stretched_g1, self.stretched_g2 = self.apply_stretch(self.hists['g'], g)
-            self.stretched_b1, self.stretched_b2 = self.apply_stretch(self.hists['b'], b)
-            self.new_img['stretch_m1'] = cv2.merge((self.stretched_r1, self.stretched_g1, self.stretched_b1))
-            self.new_img['stretch_m2'] = cv2.merge((self.stretched_r2, self.stretched_g2, self.stretched_b2))
-            self.hists['r_s1'], self.hists['g_s1'], self.hists['b_s1'] = self.make_hists(self.new_img['stretch_m1'])
-            self.hists['r_s2'], self.hists['g_s2'], self.hists['b_s2'] = self.make_hists(self.new_img['stretch_m2'])
+    # changes: rgb to hsv, equalization method changed from normalize to equalizehist
+    
+    def __init__(self, img, color = True):
+        self.img['Orig'] = img
+        self.isColor = color
+        if self.isColor:
+            # make the color hist, stretch value channel, combine and make hist for stretched
+            self.img['Orig'] = cv2.cvtColor(self.img['Orig'], cv2.COLOR_BGR2HSV)
+            h, s, v = cv2.split(self.img['Orig'])
+            self.hists['v'] = cv2.calcHist([v], [0], None, [256], [0,256])
+            stretched_v1, stretched_v2 = self.apply_stretch(self.hists['v'], v)
+            self.img['Stretched M1'] = cv2.merge((h, s, stretched_v1))
+            self.img['Stretched M2'] = cv2.merge((h, s, stretched_v2))
+            self.hists['v_s1'] = cv2.calcHist([stretched_v1], [0], None, [256], [0,256])
+            self.hists['v_s2'] = cv2.calcHist([stretched_v2], [0], None, [256], [0,256])
+            # equalize and make a new hist
+            equalized_v = cv2.equalizeHist(v)
+            self.hists['v_e'] = cv2.calcHist([equalized_v], [0], None, [256], [0,256])
+            self.img['Equalized'] = cv2.merge((h, s, equalized_v))
         else:
             # make the grey hist, stretch it, and make a new hist
-            self.img = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
-            self.hists['bw'] = cv2.calcHist([self.img], [0], None, [256], [0,256])
-            self.new_img['stretch_m1'], self.new_img['stretch_m2'] = self.apply_stretch(self.hists['bw'])
-            self.hists['bw_s1'] = cv2.calcHist([self.new_img['stretch_m1']], [0], None, [256], [0,256])
-            self.hists['bw_s2'] = cv2.calcHist([self.new_img['stretch_m2']], [0], None, [256], [0,256])
-        
-        # creates new images using equalization
-        self.new_img['equalization_m1'] = self.hist_equalization_1()
-        self.new_img['equalization_m2'] = self.hist_equalization_2()
-        
-        # makes new hists based on the equalized images
-        if rgb:
-            self.hists['r_e1'], self.hists['g_e1'], self.hists['b_e1'] = self.make_hists(self.new_img['equalization_m1'])
-            self.hists['r_e2'], self.hists['g_e2'], self.hists['b_e2'] = self.make_hists(self.new_img['equalization_m2'])
-        else:
-            self.hists['bw_e1'] = cv2.calcHist([self.new_img['equalization_m1']], [0], None, [256], [0,256])
-            self.hists['bw_e2'] = cv2.calcHist([self.new_img['equalization_m2']], [0], None, [256], [0,256])
-
-            
-    # takes an image and makes a hist for each color channel
-    # should only be called for rgb (or other 3-channel) images
-    def make_hists(self, img = None):
-        if img is None:
-            img = self.img
-        
-        r, g, b = cv2.split(img)
-        r = cv2.calcHist([r], [0], None, [256], [0,256])
-        g = cv2.calcHist([g], [0], None, [256], [0,256])
-        b = cv2.calcHist([b], [0], None, [256], [0,256])
-        return r, g, b
+            self.img['Orig'] = cv2.cvtColor(self.img['Orig'], cv2.COLOR_BGR2GRAY)
+            self.hists['bw'] = cv2.calcHist([self.img['Orig']], [0], None, [256], [0,256])
+            self.img['Stretched M1'], self.img['Stretched M2'] = self.apply_stretch(self.hists['bw'])
+            self.hists['bw_s1'] = cv2.calcHist([self.img['Stretched M1']], [0], None, [256], [0,256])
+            self.hists['bw_s2'] = cv2.calcHist([self.img['Stretched M2']], [0], None, [256], [0,256])
+            # equalize and make a new hist
+            self.img['Equalized'] = cv2.equalizeHist(self.img['Orig'])
+            self.hists['bw_e'] = cv2.calcHist([self.img['Equalized']], [0], None, [256], [0,256])
     
     # method 1
     # find the pixel val that contains a specific amount of data below it
@@ -116,7 +96,7 @@ class ProcessImg:
     # applies m1/m2 stretch and algorithm methods
     def apply_stretch(self, hist, img = None):
         if img is None:
-            img = self.img
+            img = self.img['Orig']
         
         c1 = self.m1_weighted_percentile(hist, self.m1_bounds)
         d1 = self.m1_weighted_percentile(hist, 100-self.m1_bounds)
@@ -128,67 +108,34 @@ class ProcessImg:
         return m1_img, m2_img
     
     
-    def hist_equalization_1(self, img = None):
-        if img is None:
-            img = self.img
-        
-        norm_img1 = cv2.normalize(img, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
-        norm_img1 = (255*norm_img1).astype(np.uint8)
-        return norm_img1
-
-    
-    def hist_equalization_2(self, img = None):
-        if img is None:
-            img = self.img
-        
-        norm_img2 = cv2.normalize(img, None, alpha=0, beta=1.2, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
-        norm_img2 = np.clip(norm_img2, 0, 1)
-        norm_img2 = (255*norm_img2).astype(np.uint8)
-        return norm_img2
-    
     def display(self):
-        # if the image is 3 channel, display the 3 channel versions
-        if len(self.img.shape) == 3:
-            self.rgb_display(self.img, self.hists['r'], self.hists['g'], self.hists['b'], 'Orig')
-            self.rgb_display(self.new_img['stretch_m1'], self.hists['r_s1'], self.hists['g_s1'], self.hists['b_s1'], 'Stretched M1')
-            self.rgb_display(self.new_img['stretch_m2'], self.hists['r_s2'], self.hists['g_s2'], self.hists['b_s2'], 'Stretched M2')
-            self.rgb_display(self.new_img['equalization_m1'], self.hists['r_e1'], self.hists['g_e1'], self.hists['b_e1'], 'Equalized M1')
-            self.rgb_display(self.new_img['equalization_m2'], self.hists['r_e2'], self.hists['g_e2'], self.hists['b_e2'], 'Equalized M2')
-        # if the img is bw display the bw versions
+        # if the image is 3 channel, display the value hists
+        if len(self.img['Orig'].shape) == 3:
+            self.display_helper(self.hists['v'], 'Orig')
+            self.display_helper(self.hists['v_s1'], 'Stretched M1')
+            self.display_helper(self.hists['v_s2'], 'Stretched M2')
+            self.display_helper(self.hists['v_e'], 'Equalized')
+        # if the img is bw display the bw hists
         else:
-            self.bw_display(self.img, self.hists['bw'], 'Orig')
-            self.bw_display(self.new_img['stretch_m1'], self.hists['bw_s1'], 'Stretched M1')
-            self.bw_display(self.new_img['stretch_m2'], self.hists['bw_s2'], 'Stretched M2')
-            self.bw_display(self.new_img['equalization_m1'], self.hists['bw_e1'], 'Equalized M1')
-            self.bw_display(self.new_img['equalization_m2'], self.hists['bw_e2'], 'Equalized M2')
+            self.display_helper(self.hists['bw'], 'Orig')
+            self.display_helper(self.hists['bw_s1'], 'Stretched M1')
+            self.display_helper(self.hists['bw_s2'], 'Stretched M2')
+            self.display_helper(self.hists['bw_e'], 'Equalized')
             
     
-    def rgb_display(self, img, r_hist, g_hist, b_hist, imgType):
-        fig, ax = plt.subplots(2, 2, figsize=[24,16])
+    def display_helper(self, hist, img_algo):
+        img = self.img[img_algo]
+        fig, ax = plt.subplots(1, 2, figsize=[15,5])
+        if self.isColor:
+            img = cv2.cvtColor(img, cv2.COLOR_HSV2RGB)
+        else:
+            plt.rcParams['image.cmap'] = 'gray'
         
-        ax[0,0].imshow(img)
-        ax[0,0].set_title(f'{imgType} Image')
-        ax[0,0].axis('off')
-
-        ax[0,1].plot(r_hist, color='red')
-        ax[0,1].set_title(f'Red {imgType} Hist')
-
-        ax[1,0].plot(g_hist, color='green')
-        ax[1,0].set_title(f'Green {imgType} Hist')
-
-        ax[1,1].plot(b_hist, color='blue')
-        ax[1,1].set_title(f'Blue {imgType} Hist')
-
-        plt.show()
-    
-    def bw_display(self, img, hist, imgType):
-        fig, ax = plt.subplots(1, 2, figsize=[24,8])
-        plt.rcParams['image.cmap'] = 'gray'
         ax[0].imshow(img)
-        ax[0].set_title(f'{imgType} Image')
+        ax[0].set_title(f'{img_algo} Image')
         ax[0].axis('off')
         
         ax[1].plot(hist)
-        ax[1].set_title(f'Grey {imgType} Hist')
+        ax[1].set_title(f'{img_algo} Hist')
         
         plt.show()
