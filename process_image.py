@@ -1,6 +1,6 @@
 import numpy as np
 import cv2
-from contrast_stretch import apply_stretch
+from contrast_stretch import apply_stretch_m1, apply_stretch_m2
 from matplotlib import pyplot as plt
 from IAGCWD import iagcwd
 
@@ -21,60 +21,101 @@ class ProcessImg:
         
         if self.isColor:
             self.img['Orig'] = cv2.cvtColor(self.img['Orig'], cv2.COLOR_BGR2HSV)
-            self.h, self.s, self.v = cv2.split(self.img['Orig'])
-            self.hists['Orig'] = cv2.calcHist([self.v], [0], None, [256], [0,256]) 
+            self.hists['Orig'] = cv2.calcHist([self.img['Orig'][:,:,2]], [0], None, [256], [0,256]) 
         else:
             self.img['Orig'] = cv2.cvtColor(self.img['Orig'], cv2.COLOR_BGR2GRAY)
             self.hists['Orig'] = cv2.calcHist([self.img['Orig']], [0], None, [256], [0,256])
-
-                
-
-    def apply_contrast_stretch(self, img_type = "Orig"):
-        hist = self.hists[img_type]
-        img = self.img[img_type]
-        if self.isColor:
-            stretched_v1, stretched_v2 = apply_stretch(self.hists['Orig'], self.v)
-            self.img['Stretched M1'] = cv2.merge((self.h, self.s, stretched_v1))
-            self.img['Stretched M2'] = cv2.merge((self.h, self.s, stretched_v2))
+    
+    
+    def enhancement_name(self, algorithm, src = 'Orig'):
+        if src == 'Orig':
+            return algorithm
         else:
-            self.img['Stretched M1'], self.img['Stretched M2'] = apply_stretch(hist, img)
-        self.make_hist('Stretched M1')
-        self.make_hist('Stretched M2')
+            return src + " to " + algorithm
+    
+    # method in progress, to simplify code
+#     def enhance(self, algorithm, func, src = 'Orig'):
+#         hist = self.hists[src]
+#         img = self.img[src]
+#         # creates name for dictionaries
+#         name = self.enhancement_name(algorithm, src)
+        
+#         # contrast stretch requires the hist in addition to the img as a parameter
+#         if 'stretch' in algorithm:
+#             if self.isColor:
+#                 v = func(hist, img[:,:,2])
+#                 self.img[name] = cv2.merge((img[:,:,0], img[:,:,1], v))
+#             else:
+#                 self.img[name] = func(hist, img)
+        
+#         else:
+#             if self.isColor:
+#                 v = func(img[:,:,2])
+#                 self.img[name] = cv2.merge((img[:,:,0], img[:,:,1], v))
+#             else:
+#                 self.img[name] = func(img)
+#         self.make_hist(name)
     
     
-    def apply_equalization(self, img_type = "Orig"):
-        img = self.img[img_type]
+    def apply_contrast_stretch_m1(self, src = "Orig"):
+        hist = self.hists[src]
+        img = self.img[src]
+        name = self.enhancement_name("stretch_m1", src)
         if self.isColor:
-            equalized_v = cv2.equalizeHist(self.v)
-            self.img['Equalized'] = cv2.merge((self.h, self.s, equalized_v))
+            stretched_v1 = apply_stretch_m1(hist, img[:,:,2])
+            self.img[name] = cv2.merge((img[:,:,0], img[:,:,1], stretched_v1))
         else:
-            self.img['Equalized'] = cv2.equalizeHist(self.img['Orig'])
-        self.make_hist('Equalized')
+            self.img[name] = apply_stretch_m1(hist, img)
+        self.make_hist(name)
     
     
-    def apply_iagcwd(self, img_type = "Orig"):
-        img = self.img[img_type]
+    def apply_contrast_stretch_m2(self, src = "Orig"):
+        hist = self.hists[src]
+        img = self.img[src]
+        name = self.enhancement_name("stretch_m2", src)
         if self.isColor:
-            iagcwd_v = iagcwd(self.v)
-            self.img['IAGCWD'] = cv2.merge((self.h, self.s, iagcwd_v))
+            stretched_v2 = apply_stretch_m2(hist, img[:,:,2])
+            self.img[name] = cv2.merge((img[:,:,0], img[:,:,1], stretched_v2))
         else:
-            self.img['IAGCWD'] = iagcwd(self.img['Orig'])
-        self.make_hist('IAGCWD')
+            self.img[name] = apply_stretch_m2(hist, img)
+        self.make_hist(name)
+    
+    
+    def apply_equalization(self, src = "Orig"):
+        img = self.img[src]
+        name = self.enhancement_name("equalize", src)
+        if self.isColor:
+            equalized_v = cv2.equalizeHist(img[:,:,2])
+            self.img[name] = cv2.merge((img[:,:,0], img[:,:,1], equalized_v))
+        else:
+            self.img[name] = cv2.equalizeHist(img)
+        self.make_hist(name)
+    
+    
+    def apply_iagcwd(self, src = "Orig"):
+        img = self.img[src]
+        name = self.enhancement_name("iagcwd", src)
+        if self.isColor:
+            iagcwd_v = iagcwd(img[:,:,2])
+            self.img[name] = cv2.merge((img[:,:,0], img[:,:,1], iagcwd_v))
+        else:
+            self.img[name] = iagcwd(img)
+        self.make_hist(name)
     
     
     # improve the implementation
-    def display(self):
+    def display(self, width = 2):
         length = len(self.img)
         imgs = []
-        imgs_vert = []
+        imgs_hori = []
         for key in self.img:
             imgs.append(self.display_helper(key))
-        for num in range((length+1)//2):
-            if (num == length//2 and length%2 == 1):
-                imgs_vert.append(cv2.vconcat([imgs[2*num], np.zeros(imgs[2*num].shape, np.uint8)]))
-            else:
-                imgs_vert.append(cv2.vconcat([imgs[2*num],imgs[2*num+1]]))
-        grid = cv2.hconcat(imgs_vert)
+        while (length%width != 0):
+            imgs.append(np.zeros(imgs[0].shape, np.uint8))
+            length += 1
+        for num in range((length+1)//width):
+            imgs_hori.append(cv2.hconcat([*imgs[width*num:width*num+width]]))
+        grid = cv2.vconcat(imgs_hori)
         cv2.imshow("Images", grid)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
