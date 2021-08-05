@@ -34,11 +34,11 @@ class ProcessImg:
     def get_name(self, algorithm, src = 'Orig'):
         if src == 'Orig':
             return algorithm
-        else:
-            return src + " to " + algorithm
+        return src + " to " + algorithm
+
     
-    # method in progress, need to simplify code
-#     def enhance(self, algorithm, func, src = 'Orig'):
+#     method in progress, need to simplify code
+#     def enhance(self, algorithm, src = 'Orig'):
 #         hist = self.hist[src]
 #         img = self.img[src]
 #         # creates name for dictionaries
@@ -46,18 +46,10 @@ class ProcessImg:
         
 #         # contrast stretch requires the hist in addition to the img as a parameter
 #         if 'stretch' in algorithm:
-#             if self.isColor:
-#                 v = func(hist, img[:,:,2])
-#                 self.img[name] = cv2.merge((img[:,:,0], img[:,:,1], v))
-#             else:
-#                 self.img[name] = func(hist, img)
+#             self.img[name] = func(hist, img)
         
 #         else:
-#             if self.isColor:
-#                 v = func(img[:,:,2])
-#                 self.img[name] = cv2.merge((img[:,:,0], img[:,:,1], v))
-#             else:
-#                 self.img[name] = func(img)
+#             self.img[name] = func(img)
 #         self.make_hist(name)
     
     
@@ -67,6 +59,7 @@ class ProcessImg:
         name = self.get_name("stretch_m1", src)
         self.img[name] = apply_stretch_m1(hist, img)
         self.make_hist(name)
+        return self.img[name]
     
     
     def apply_contrast_stretch_m2(self, src = "Orig"):
@@ -75,6 +68,7 @@ class ProcessImg:
         name = self.get_name("stretch_m2", src)
         self.img[name] = apply_stretch_m2(hist, img)
         self.make_hist(name)
+        return self.img[name]
     
     
     def apply_equalization(self, src = "Orig"):
@@ -82,6 +76,7 @@ class ProcessImg:
         name = self.get_name("equalize", src)
         self.img[name] = cv2.equalizeHist(img)
         self.make_hist(name)
+        return self.img[name]
     
     
     def apply_iagcwd(self, src = "Orig"):
@@ -89,6 +84,23 @@ class ProcessImg:
         name = self.get_name("iagcwd", src)
         self.img[name] = iagcwd(img)
         self.make_hist(name)
+        return self.img[name]
+    
+    
+    def apply_sece(self, src = "Orig"):
+        img = self.img[src]
+        name = self.get_name("sece", src)
+        self.img[name] = sece(img)
+        self.make_hist(name)
+        return self.img[name]
+    
+    
+    def apply_sece_dct(self, src = "Orig"):
+        img = self.img[src]
+        name = self.get_name("sece_dct", src)
+        self.img[name] = sece_dct(img)
+        self.make_hist(name)
+        return self.img[name]
     
     
     # may not work bc imgs are int not float, may need conversion or rounding
@@ -112,6 +124,7 @@ class ProcessImg:
         name = self.get_name("sigmoid", src)
         self.img[name] = self.sigmoid_stretch(img)
         self.make_hist(name)
+        return self.img[name]
     
     
 #     def sigmoid_stretch(self, v_in, a = 1.6):
@@ -138,10 +151,11 @@ class ProcessImg:
         cv2.imshow("Images", grid)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
+        return grid
                 
     
     # returns resized img with label, in BGR, assuming img is colored
-    def display_helper(self, img_algo, height, loc = (50,50)):
+    def display_helper(self, img_algo, height, loc = (10,30)):
         if self.isColor:
             img = cv2.merge((self.h, self.s, self.img[img_algo]))
             img = cv2.cvtColor(img, cv2.COLOR_HSV2BGR)
@@ -156,6 +170,7 @@ class ProcessImg:
     def plot(self):
         for key in self.hist:
             self.plot_helper(key)
+        pass
     
     
     def plot_helper(self,img_algo):
@@ -176,14 +191,17 @@ class ProcessImg:
         ax[1].set_title(f'{img_algo} Hist')
         
         plt.show()
+        pass
     
     
     def make_hist(self,img_algo):
         if img_algo in self.img and self.makeHist:
             self.hist[img_algo] = cv2.calcHist([self.img[img_algo]], [0], None, [256], [0,256])
+            return self.hist[img_algo]
+        pass
                 
     
-    # assumes image is color
+    # assumes image is color and that both src are valid
     def show_diff(self, src1, src2 = 'Orig', display = True, print_avg = True):
         img1 = self.img[src1]
         img2 = self.img[src2]
