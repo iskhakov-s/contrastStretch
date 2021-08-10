@@ -7,26 +7,52 @@ from contrast_stretch import apply_stretch_m1, apply_stretch_m2
 from IAGCWD import iagcwd
 from sece import sece, sece_dct
 
+
+def apply_sigmoid_stretch(img, a = 12, b = 6):
+    c1 = 1 / (1 + exp(b) )
+    c2 = 1 / (1 + exp(b-a)) - c1
+
+    img = img.astype(np.float32)
+    v_out = 1 / (1 + np.exp(-1/255 * (a*img - 255*b) ) )
+    v_out = np.round( (v_out-c1)/c2 * 255 )
+
+    np.putmask(v_out, v_out > 255, 255)
+    np.putmask(v_out, v_out < 0, 0)
+    v_out = v_out.astype(np.uint8)
+
+    return v_out
+
+
 class ProcessImg:
+    
+    name_to_func = {
+                    'stretch_m1' : apply_stretch_m1,
+                    'stretch_m2' : apply_stretch_m2,
+                    'equalize' : cv2.equalizeHist,
+                    'iagcwd' : iagcwd,
+                    'sece' : sece,
+                    'sece_dct' : sece_dct,
+                    'sigmoid' : apply_sigmoid_stretch
+    }
     
     #TODO
     #    simplify init
     #    follow python naming convention for functions and class vars
     #    throw errors if wrong var types passed or if invalid name is accessed
 
+    
     # assumes img is bgr
     def __init__(self, img, makeHist = True, color = True):
         self.img = {}
         self.hist = {}
-        self.img['Orig'] = img
         self.isColor = color
         self.makeHist = makeHist
         
         if self.isColor:
-            self.img['Orig'] = cv2.cvtColor(self.img['Orig'], cv2.COLOR_BGR2HSV)
-            self.h, self.s, self.img['Orig'] = cv2.split(self.img['Orig'])            
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+            self.h, self.s, self.img['Orig'] = cv2.split(img)            
         else:
-            self.img['Orig'] = cv2.cvtColor(self.img['Orig'], cv2.COLOR_BGR2GRAY)
+            self.img['Orig'] = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         
         self.hist['Orig'] = cv2.calcHist([self.img['Orig']], [0], None, [256], [0,256])
     
@@ -38,70 +64,82 @@ class ProcessImg:
 
     
 #     method in progress, need to simplify code
-#     def enhance(self, algorithm, src = 'Orig'):
+    def enhance(self, algorithm, src = 'Orig'):
+        img = self.img[src]
+        # creates name for dictionaries
+        name = self.get_name(algorithm, src)
+        
+        # contrast stretch requires the hist in addition to the img as a parameter
+        if 'stretch' in algorithm:
+            hist = self.hist[src]
+            self.img[name] = self.name_to_func[algorithm](img, hist)
+        else:
+            self.img[name] = self.name_to_func[algorithm](img)
+        
+        self.make_hist(name)
+        return self.img[name]
+    
+    
+    def enhance_all(self, src = 'Orig'):
+        for key in self.name_to_func:
+            self.enhance(key, src)
+    
+#     def apply_contrast_stretch_m1(self, src = "Orig"):
 #         hist = self.hist[src]
 #         img = self.img[src]
-#         # creates name for dictionaries
-#         name = self.get_name(algorithm, src)
-        
-#         # contrast stretch requires the hist in addition to the img as a parameter
-#         if 'stretch' in algorithm:
-#             self.img[name] = func(hist, img)
-        
-#         else:
-#             self.img[name] = func(img)
+#         name = self.get_name("stretch_m1", src)
+#         self.img[name] = apply_stretch_m1(hist, img)
 #         self.make_hist(name)
+#         return self.img[name]
     
     
-    def apply_contrast_stretch_m1(self, src = "Orig"):
-        hist = self.hist[src]
-        img = self.img[src]
-        name = self.get_name("stretch_m1", src)
-        self.img[name] = apply_stretch_m1(hist, img)
-        self.make_hist(name)
-        return self.img[name]
+#     def apply_contrast_stretch_m2(self, src = "Orig"):
+#         hist = self.hist[src]
+#         img = self.img[src]
+#         name = self.get_name("stretch_m2", src)
+#         self.img[name] = apply_stretch_m2(hist, img)
+#         self.make_hist(name)
+#         return self.img[name]
     
     
-    def apply_contrast_stretch_m2(self, src = "Orig"):
-        hist = self.hist[src]
-        img = self.img[src]
-        name = self.get_name("stretch_m2", src)
-        self.img[name] = apply_stretch_m2(hist, img)
-        self.make_hist(name)
-        return self.img[name]
+#     def apply_equalization(self, src = "Orig"):
+#         img = self.img[src]
+#         name = self.get_name("equalize", src)
+#         self.img[name] = cv2.equalizeHist(img)
+#         self.make_hist(name)
+#         return self.img[name]
     
     
-    def apply_equalization(self, src = "Orig"):
-        img = self.img[src]
-        name = self.get_name("equalize", src)
-        self.img[name] = cv2.equalizeHist(img)
-        self.make_hist(name)
-        return self.img[name]
+#     def apply_iagcwd(self, src = "Orig"):
+#         img = self.img[src]
+#         name = self.get_name("iagcwd", src)
+#         self.img[name] = iagcwd(img)
+#         self.make_hist(name)
+#         return self.img[name]
     
     
-    def apply_iagcwd(self, src = "Orig"):
-        img = self.img[src]
-        name = self.get_name("iagcwd", src)
-        self.img[name] = iagcwd(img)
-        self.make_hist(name)
-        return self.img[name]
+#     def apply_sece(self, src = "Orig"):
+#         img = self.img[src]
+#         name = self.get_name("sece", src)
+#         self.img[name] = sece(img)
+#         self.make_hist(name)
+#         return self.img[name]
     
     
-    def apply_sece(self, src = "Orig"):
-        img = self.img[src]
-        name = self.get_name("sece", src)
-        self.img[name] = sece(img)
-        self.make_hist(name)
-        return self.img[name]
+#     def apply_sece_dct(self, src = "Orig"):
+#         img = self.img[src]
+#         name = self.get_name("sece_dct", src)
+#         self.img[name] = sece_dct(img)
+#         self.make_hist(name)
+#         return self.img[name]
     
     
-    def apply_sece_dct(self, src = "Orig"):
-        img = self.img[src]
-        name = self.get_name("sece_dct", src)
-        self.img[name] = sece_dct(img)
-        self.make_hist(name)
-        return self.img[name]
-    
+#     def apply_sigmoid_stretch(self, src = 'Orig'):
+#         img = self.img[src]
+#         name = self.get_name("sigmoid", src)
+#         self.img[name] = self.sigmoid_stretch(img)
+#         self.make_hist(name)
+#         return self.img[name]
     
     # may not work bc imgs are int not float, may need conversion or rounding
     def sigmoid_stretch(self, v_in, a = 12, b = 6):
@@ -109,22 +147,14 @@ class ProcessImg:
         c2 = 1 / (1 + exp(b-a)) - c1
         
         v_in = v_in.astype(np.float32)
-        v_out = 1 / (1 + np.exp(-1/255 * (a*v_in - 255*b) ) )
-        v_out = np.round( (v_out-c1)/c2 * 255 )
+        out = 1 / (1 + np.exp(-1/255 * (a*v_in - 255*b) ) )
+        out = np.round( (out-c1)/c2 * 255 )
         
-        np.putmask(v_out, v_out > 255, 255)
-        np.putmask(v_out, v_out < 0, 0)
-        v_out = v_out.astype(np.uint8)
+        np.putmask(out, out > 255, 255)
+        np.putmask(out, out < 0, 0)
+        out = out.astype(np.uint8)
         
-        return v_out
-    
-    
-    def apply_sigmoid_stretch(self, src = 'Orig'):
-        img = self.img[src]
-        name = self.get_name("sigmoid", src)
-        self.img[name] = self.sigmoid_stretch(img)
-        self.make_hist(name)
-        return self.img[name]
+        return out
     
     
 #     def sigmoid_stretch(self, v_in, a = 1.6):
@@ -222,6 +252,7 @@ class ProcessImg:
         return avg_diff
     
     
+    # assumes hsv
     def get_img(self, img):
         return cv2.merge((self.h, self.s, self.img[img]))
     

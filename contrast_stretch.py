@@ -61,12 +61,13 @@ def algorithm(c, d, img):
 
 
 # applies m1/m2 stretch and algorithm methods
-def apply_stretch(hist, img):
+def apply_stretch_m1(img, hist):
     c1 = m1_weighted_percentile(hist, m1_bounds)
     d1 = m1_weighted_percentile(hist, 100-m1_bounds)
     m1_img = algorithm(c1, d1, img)
+    return m1_img
 
+def apply_stretch_m2(img, hist):
     c2, d2 = m2_percent_distribution(hist)
     m2_img = algorithm(c2, d2, img)
-
-    return m1_img, m2_img
+    return m2_img
