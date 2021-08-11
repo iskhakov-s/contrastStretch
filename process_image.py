@@ -4,42 +4,77 @@ from matplotlib import pyplot as plt
 from math import exp
 
 from contrast_stretch import apply_stretch_m1, apply_stretch_m2
-from IAGCWD import iagcwd
+from IAGCWD import iagcwd, agcwd
 from sece import sece, sece_dct
 
 
-def apply_sigmoid_stretch(img, a = 12, b = 6):
-    c1 = 1 / (1 + exp(b) )
-    c2 = 1 / (1 + exp(b-a)) - c1
+def alpha_blend(img1, img2, alpha = 0.5):
+    img1 = img1.astype(np.float32)
+    img2 = img2.astype(np.float32)
+    out = alpha * img1 + (1-alpha) *img2
+    np.putmask(out, out > 255, 255)
+    np.putmask(out, out < 0, 0)
+    out = out.astype(np.uint8)
+    return out
 
+
+def apply_sigmoid_stretch(img, g = 10, c = .5):
     img = img.astype(np.float32)
-    v_out = 1 / (1 + np.exp(-1/255 * (a*img - 255*b) ) )
-    v_out = np.round( (v_out-c1)/c2 * 255 )
+    z = ( img - img.min() ) / (img.max() - img.min())
+    a = 1 / (1 + exp(g * c))
+    b = 1 / (1 + exp(g * (c-1))) - a
+    out = 1 / (1 + np.exp(g * (c-z)))
+    out = (out - a) / b * 255
+    np.putmask(out, out > 255, 255)
+    np.putmask(out, out < 0, 0)
+    out = out.astype(np.uint8)
+    return out
 
-    np.putmask(v_out, v_out > 255, 255)
-    np.putmask(v_out, v_out < 0, 0)
-    v_out = v_out.astype(np.uint8)
 
-    return v_out
+def apply_clahe(img, clip_limit=4.0, grid_size = (8,8)):
+    clahe = cv2.createCLAHE(clipLimit = clip_limit, tileGridSize = grid_size)
+    return clahe.apply(img)
+
+
+def novel_algorithm(img):
+    """ New algorithm
+    Splits image in two vertically, applies sigmoid stretch to each half
+    then merges the images and blends it with the original image
+    applies clahe to the result, then agcwd to that result
+    returns the alpha blend of the clahe and agcwd image results
+    """
+    r1 = apply_sigmoid_stretch(img[:,:img.shape[1]//2])
+    r2 = apply_sigmoid_stretch(img[:,img.shape[1]//2:])
+    sig = np.hstack((r1,r2))
+    a_blend = alpha_blend(sig, img)
+    clahe = apply_clahe(a_blend)
+    hist = cv2.calcHist([clahe], [0], None, [256], [0,256])
+    agc = agcwd(clahe, hist)
+    out = alpha_blend(clahe, agc)
+    return out
+    
 
 
 class ProcessImg:
     
-    name_to_func = {
+    # TODO
+    #    simplify init
+    #    follow python naming convention for functions and class vars
+    #    throw errors if wrong var types passed or if invalid name is accessed
+    
+    func = {
                     'stretch_m1' : apply_stretch_m1,
                     'stretch_m2' : apply_stretch_m2,
                     'equalize' : cv2.equalizeHist,
                     'iagcwd' : iagcwd,
+                    'agcwd' : agcwd,
                     'sece' : sece,
                     'sece_dct' : sece_dct,
-                    'sigmoid' : apply_sigmoid_stretch
+                    'sigmoid' : apply_sigmoid_stretch,
+                    'clahe' : apply_clahe,
+                    'novel' : novel_algorithm
     }
     
-    #TODO
-    #    simplify init
-    #    follow python naming convention for functions and class vars
-    #    throw errors if wrong var types passed or if invalid name is accessed
-
     
     # assumes img is bgr
     def __init__(self, img, makeHist = True, color = True):
@@ -70,99 +105,19 @@ class ProcessImg:
         name = self.get_name(algorithm, src)
         
         # contrast stretch requires the hist in addition to the img as a parameter
-        if 'stretch' in algorithm:
+        if 'stretch' in algorithm or algorithm == 'agcwd':
             hist = self.hist[src]
-            self.img[name] = self.name_to_func[algorithm](img, hist)
+            self.img[name] = self.func[algorithm](img, hist)
         else:
-            self.img[name] = self.name_to_func[algorithm](img)
+            self.img[name] = self.func[algorithm](img)
         
         self.make_hist(name)
         return self.img[name]
     
     
     def enhance_all(self, src = 'Orig'):
-        for key in self.name_to_func:
+        for key in self.func:
             self.enhance(key, src)
-    
-#     def apply_contrast_stretch_m1(self, src = "Orig"):
-#         hist = self.hist[src]
-#         img = self.img[src]
-#         name = self.get_name("stretch_m1", src)
-#         self.img[name] = apply_stretch_m1(hist, img)
-#         self.make_hist(name)
-#         return self.img[name]
-    
-    
-#     def apply_contrast_stretch_m2(self, src = "Orig"):
-#         hist = self.hist[src]
-#         img = self.img[src]
-#         name = self.get_name("stretch_m2", src)
-#         self.img[name] = apply_stretch_m2(hist, img)
-#         self.make_hist(name)
-#         return self.img[name]
-    
-    
-#     def apply_equalization(self, src = "Orig"):
-#         img = self.img[src]
-#         name = self.get_name("equalize", src)
-#         self.img[name] = cv2.equalizeHist(img)
-#         self.make_hist(name)
-#         return self.img[name]
-    
-    
-#     def apply_iagcwd(self, src = "Orig"):
-#         img = self.img[src]
-#         name = self.get_name("iagcwd", src)
-#         self.img[name] = iagcwd(img)
-#         self.make_hist(name)
-#         return self.img[name]
-    
-    
-#     def apply_sece(self, src = "Orig"):
-#         img = self.img[src]
-#         name = self.get_name("sece", src)
-#         self.img[name] = sece(img)
-#         self.make_hist(name)
-#         return self.img[name]
-    
-    
-#     def apply_sece_dct(self, src = "Orig"):
-#         img = self.img[src]
-#         name = self.get_name("sece_dct", src)
-#         self.img[name] = sece_dct(img)
-#         self.make_hist(name)
-#         return self.img[name]
-    
-    
-#     def apply_sigmoid_stretch(self, src = 'Orig'):
-#         img = self.img[src]
-#         name = self.get_name("sigmoid", src)
-#         self.img[name] = self.sigmoid_stretch(img)
-#         self.make_hist(name)
-#         return self.img[name]
-    
-    # may not work bc imgs are int not float, may need conversion or rounding
-    def sigmoid_stretch(self, v_in, a = 12, b = 6):
-        c1 = 1 / (1 + exp(b) )
-        c2 = 1 / (1 + exp(b-a)) - c1
-        
-        v_in = v_in.astype(np.float32)
-        out = 1 / (1 + np.exp(-1/255 * (a*v_in - 255*b) ) )
-        out = np.round( (out-c1)/c2 * 255 )
-        
-        np.putmask(out, out > 255, 255)
-        np.putmask(out, out < 0, 0)
-        out = out.astype(np.uint8)
-        
-        return out
-    
-    
-#     def sigmoid_stretch(self, v_in, a = 1.6):
-#         v_out = 255 / (1 + np.exp( -a * ( v_in - 127/32 ) ) )
-#         np.putmask(v_out, v_out > 255, 255)
-#         np.putmask(v_out, v_out < 0, 0)
-#         v_out = v_out.astype(np.uint8)
-#         return v_out
     
     
     # improve the implementation

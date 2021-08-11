@@ -66,12 +66,11 @@ def iagcwd(img):
     return img
 
 
-def agcwd(img, hist):
+def agcwd(img, hist, alpha = 0.5):
     l_max = 256
     pdf = hist.flatten() / img.size
     pdf_max = pdf.max()
     pdf_min = pdf.min()
-    alpha = 0.5
     pdf_w = pdf_max * ( (pdf - pdf_min) / (pdf_max - pdf_min) ) ** alpha
 
     gamma = 1 - np.cumsum(pdf_w) / np.sum(pdf_w)
